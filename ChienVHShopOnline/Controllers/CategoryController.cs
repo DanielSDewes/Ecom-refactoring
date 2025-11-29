@@ -1,117 +1,162 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Linq;
-using System.Web;
-using System.Web.Mvc;
-using ChienVHShopOnline.Models;
 using System.Net;
-using System.Data.Entity;
+using System.Web.Mvc;
+using ChienVHShopOnline.Interfaces;
+using ChienVHShopOnline.Models;
+using ChienVHShopOnline.ViewModels;
 using PagedList;
 
 namespace ChienVHShopOnline.Controllers
 {
     public class CategoryController : Controller
     {
-        ChienVHShopDBEntities db = new ChienVHShopDBEntities();
-  
+        private readonly ICategoryService _service;
+
+        public CategoryController(ICategoryService service)
+        {
+            _service = service ?? throw new ArgumentNullException(nameof(service));
+        }
+
         public ActionResult Index(int? page)
         {
             int pageNumber = page ?? 1;
             int pageSize = 5;
-            var catList = db.Categories.OrderBy(x => x.Name).ToPagedList(pageNumber, pageSize);
-            return View(catList);
-            //return View(db.Categories.OrderBy(x => x.Name).ToList());
+
+            var categories = _service
+                .GetAllOrdered()
+                .Select(MapToViewModel);
+
+            var pagedList = categories.ToPagedList(pageNumber, pageSize);
+
+            return View(pagedList);
         }
 
         public PartialViewResult CategoryPartial()
         {
-            var categoryList = db.Categories.OrderBy(x => x.Name).ToList();
+            var categoryList = _service
+                .GetAllOrdered()
+                .Select(MapToViewModel)
+                .ToList();
+
             return PartialView(categoryList);
         }
 
-        // GET: Category/Create
         public ActionResult Create()
         {
-            return View();
+            return View(new CategoryViewModel());
         }
 
-        // POST: Category/Create
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public ActionResult Create([Bind(Include = "CategoryID,Name")] Category category)
+        public ActionResult Create(CategoryViewModel viewModel)
         {
-            if (ModelState.IsValid)
+            if (!ModelState.IsValid)
             {
-                db.Categories.Add(category);
-                db.SaveChanges();
-                return RedirectToAction("Index");
+                return View(viewModel);
             }
 
-            return View(category);
+            var category = MapToEntity(viewModel);
+
+            var result = _service.Create(category);
+            if (!result.Success)
+            {
+                ModelState.AddModelError(string.Empty, result.Message);
+                return View(viewModel);
+            }
+
+            return RedirectToAction("Index");
         }
 
-        // GET: Category/Edit/1
         public ActionResult Edit(int? id)
         {
-            if (id == null)
+            if (!id.HasValue)
             {
                 return new HttpStatusCodeResult(HttpStatusCode.BadRequest);
             }
-            Category category = db.Categories.Find(id);
+
+            var category = _service.GetById(id.Value);
             if (category == null)
             {
                 return HttpNotFound();
             }
-            return View(category);
+
+            var viewModel = MapToViewModel(category);
+            return View(viewModel);
         }
 
-        // POST: Category/Edit/1
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public ActionResult Edit([Bind(Include = "CategoryId,Name")] Category category)
+        public ActionResult Edit(CategoryViewModel viewModel)
         {
-            if (ModelState.IsValid)
+            if (!ModelState.IsValid)
             {
-                db.Entry(category).State = EntityState.Modified;
-                db.SaveChanges();
-                return RedirectToAction("Index");
+                return View(viewModel);
             }
-            return View(category);
+
+            var category = MapToEntity(viewModel);
+
+            var result = _service.Update(category);
+            if (!result.Success)
+            {
+                ModelState.AddModelError(string.Empty, result.Message);
+                return View(viewModel);
+            }
+
+            return RedirectToAction("Index");
         }
 
-        // GET: Category/Details/1
         public ActionResult Details(int? id)
         {
-            if (id == null)
+            if (!id.HasValue)
             {
                 return new HttpStatusCodeResult(HttpStatusCode.BadRequest);
             }
-            var category = db.Categories.Find(id);
+
+            var category = _service.GetById(id.Value);
             if (category == null)
             {
                 return HttpNotFound();
             }
-            return View(category);
+
+            var viewModel = MapToViewModel(category);
+            return View(viewModel);
         }
 
-        // POST: Category/Delete/1
         [HttpPost, ActionName("Delete")]
         [ValidateAntiForgeryToken]
         public ActionResult DeleteConfirmed(int id)
         {
-            var category = db.Categories.Find(id);
-            db.Categories.Remove(category);
-            db.SaveChanges();
+            var result = _service.Delete(id);
+
+            if (!result.Success)
+            {
+                TempData["Error"] = result.Message;
+            }
+
             return RedirectToAction("Index");
         }
 
-        protected override void Dispose(bool disposing)
+        private static CategoryViewModel MapToViewModel(Category category)
         {
-            if (disposing)
+            if (category == null) return null;
+
+            return new CategoryViewModel
             {
-                base.Dispose(disposing);
-            }
-            base.Dispose(disposing);
+                CategoryId = category.CategoryId,
+                Name = category.Name
+            };
+        }
+
+        private static Category MapToEntity(CategoryViewModel viewModel)
+        {
+            if (viewModel == null) return null;
+
+            return new Category
+            {
+                CategoryId = viewModel.CategoryId,
+                Name = viewModel.Name
+            };
         }
     }
 }
