@@ -13,7 +13,7 @@ namespace ChienVHShopOnline.Controllers
     public class CategoryController : Controller
     {
         ChienVHShopDBEntities db = new ChienVHShopDBEntities();
-        // GET: Category
+  
         public ActionResult Index(int? page)
         {
             int pageNumber = page ?? 1;
